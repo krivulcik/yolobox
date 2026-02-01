@@ -10,6 +10,10 @@ ENV NODE_VERSION=20
 ENV DOTNET_ROOT=/usr/share/dotnet
 ENV PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
 
+# Add user's local bin to PATH
+ARG USERNAME
+ENV PATH=/home/${USERNAME}/.local/bin:$PATH
+
 # Update system and install basic dependencies
 RUN apt-get update && apt-get install -y \
     curl \
