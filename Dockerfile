@@ -10,10 +10,6 @@ ENV NODE_VERSION=20
 ENV DOTNET_ROOT=/usr/share/dotnet
 ENV PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
 
-# Add user's local bin to PATH
-ARG USERNAME
-ENV PATH=/home/${USERNAME}/.local/bin:$PATH
-
 # Update system and install basic dependencies
 RUN apt-get update && apt-get install -y \
     curl \
@@ -62,9 +58,6 @@ RUN wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/package
     apt-get install -y dotnet-sdk-10.0 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
 # Create a non-root user, allow passwordless sudo
 RUN useradd -m -s /bin/bash ${USERNAME} && \
     usermod -aG sudo ${USERNAME} && \
@@ -84,6 +77,13 @@ RUN mkdir -p /home/${USERNAME}/.ssh && \
     chmod 700 /home/${USERNAME}/.ssh && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
     mkdir /var/run/sshd
+
+# Add .local/bin to PATH in bashrc
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.bashrc && \
+    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+
+# Install Claude Code CLI as the user
+RUN su - ${USERNAME} -c "curl -fsSL https://claude.ai/install.sh | bash"
 
 EXPOSE 22
 SHELL ["/bin/bash", "-c"]
