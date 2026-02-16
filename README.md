@@ -86,6 +86,66 @@ The `yolobox-redeploy.sh` script simplifies container management by stopping any
 
 The script automatically mounts a workspace directory based on the hostname at `$HOME/workspace/<hostname>`.
 
+### Using Docker Compose
+
+Docker Compose provides an alternative way to manage YoloBox containers with persistent configuration.
+
+#### Quick Start
+
+```bash
+# 1. Create your environment file
+cp .env.example .env
+
+# 2. Edit .env with your settings (optional, defaults work out of the box)
+# CONTAINER_NAME=yolo-claudecode
+# DOCKER_IMAGE=yoloimage
+# HOST_PORT=22222
+
+# 3. Start the container
+docker compose up -d
+
+# 4. Stop and remove the container
+docker compose down
+```
+
+#### Available Commands
+
+| Action | Command |
+|--------|---------|
+| Start container in background | `docker compose up -d` |
+| Stop and remove container | `docker compose down` |
+| Restart container | `docker compose restart` |
+| View logs | `docker compose logs -f` |
+| Stop without removing | `docker compose stop` |
+| Start stopped container | `docker compose start` |
+
+#### Environment Variables
+
+Configure the container by creating a `.env` file or exporting environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONTAINER_NAME` | `yolo-claudecode` | Container name and hostname |
+| `DOCKER_IMAGE` | `yoloimage` | Docker image to use |
+| `HOST_PORT` | `22222` | Host port for SSH access |
+| `WORKSPACE_PATH` | `$HOME/workspace/$CONTAINER_NAME` | Workspace mount path |
+
+#### Docker Compose vs Redeploy Script
+
+**Use Docker Compose when you want:**
+- Persistent configuration in `.env` file
+- Standard docker compose workflow
+- Easier service management
+- Automatic restart on failure
+- To add additional services later
+
+**Use the redeploy script when you want:**
+- Quick one-off deployments
+- To pass parameters directly on command line
+- To programmatically manage multiple containers
+
+See [DOCKER_COMPOSE_USAGE.md](DOCKER_COMPOSE_USAGE.md) for more detailed documentation.
+
 ### Connect via SSH
 
 ```bash

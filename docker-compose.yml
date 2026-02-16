@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  yolobox:
+    image: ${DOCKER_IMAGE:-yoloimage}
+    container_name: ${CONTAINER_NAME:-yolo-claudecode}
+    hostname: ${CONTAINER_NAME:-yolo-claudecode}
+
+    ports:
+      - "${HOST_PORT:-22222}:22"
+
+    volumes:
+      - ${WORKSPACE_PATH:-${HOME}/workspace/${CONTAINER_NAME:-yolo-claudecode}}:/workspace
+
+    restart: unless-stopped

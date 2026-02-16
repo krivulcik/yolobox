@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  yolobox:
+    # Docker image to use
+    image: yoloimage
+
+    # Container name and hostname
+    container_name: yolo-claudecode
+    hostname: yolo-claudecode
+
+    # Port mapping: host_port:container_port
+    # Maps host port to container's SSH port (22)
+    ports:
+      - "22222:22"
+
+    # Volume mounts
+    # Maps host workspace directory to /workspace in container
+    volumes:
+      - ${HOME}/workspace/yolo-claudecode:/workspace
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Optional: Add more configuration as needed
+    # environment:
+    #   - KEY=value
+
+    # Optional: Resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 4G
+
+# Notes:
+# 1. Replace 'yolo-claudecode' with your desired hostname/container name
+# 2. Adjust the port mapping (22222) if needed
+# 3. Update the image name if using a different image
+# 4. The workspace path uses ${HOME} which will be expanded from your environment
+# 5. Use 'docker compose up -d' to start
+# 6. Use 'docker compose down' to stop and remove
+# 7. Use 'docker compose restart' to restart without recreating
