@@ -2,3 +2,4 @@ home/yolo/.gitconfig
 home/yolo/.config
 home/yolo/.claude/
 home/yolo/.claude.json
+.env.*
