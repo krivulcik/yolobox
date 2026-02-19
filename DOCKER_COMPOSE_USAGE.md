@@ -76,7 +76,32 @@ docker compose up -d
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `COMPOSE_PROJECT_NAME` | yolo-claudecode | Compose project name — **must be unique per box** to run multiple simultaneously |
 | `CONTAINER_NAME` | yolo-claudecode | Container name and hostname |
 | `DOCKER_IMAGE` | yoloimage | Docker image to use |
 | `HOST_PORT` | 22222 | Host port for SSH access |
 | `WORKSPACE_PATH` | `$HOME/workspace/$CONTAINER_NAME` | Workspace mount path |
+
+## Running Multiple Boxes Simultaneously
+
+Each env file **must** have a unique `COMPOSE_PROJECT_NAME`, `CONTAINER_NAME`, and `HOST_PORT`. Without a distinct project name, starting the second box tears down the first.
+
+Example `.env.claude`:
+```bash
+COMPOSE_PROJECT_NAME=claude-box1
+CONTAINER_NAME=claude-box1
+HOST_PORT=22222
+```
+
+Example `.env.claude2a`:
+```bash
+COMPOSE_PROJECT_NAME=claude-box2a
+CONTAINER_NAME=claude-box2a
+HOST_PORT=22223
+```
+
+Then run each independently:
+```bash
+docker compose --env-file .env.claude up -d
+docker compose --env-file .env.claude2a up -d
+```

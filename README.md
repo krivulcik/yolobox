@@ -125,6 +125,7 @@ Configure the container by creating a `.env` file or exporting environment varia
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `COMPOSE_PROJECT_NAME` | `yolo-claudecode` | Compose project name — **must be unique per box** to run multiple simultaneously |
 | `CONTAINER_NAME` | `yolo-claudecode` | Container name and hostname |
 | `DOCKER_IMAGE` | `yoloimage` | Docker image to use |
 | `HOST_PORT` | `22222` | Host port for SSH access |
