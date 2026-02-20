@@ -55,6 +55,7 @@ docker build --build-arg GITHUB_USERNAME=your-github-username -t yoloimage .
 # With custom username
 docker build --build-arg USERNAME=myuser --build-arg GITHUB_USERNAME=your-github-username -t yoloimage .
 ```
+Note: If you are using docker compose, the image will be built automatically on `docker compose up` if it doesn't exist. You can also force a rebuild with `docker compose up --build`.
 
 ### Run the Container
 
@@ -97,6 +98,7 @@ Docker Compose provides an alternative way to manage YoloBox containers with per
 cp .env.example .env
 
 # 2. Edit .env with your settings (optional, defaults work out of the box)
+GITHUB_USERNAME=your_github_username
 # CONTAINER_NAME=yolo-claudecode
 # DOCKER_IMAGE=yoloimage
 # HOST_PORT=22222
