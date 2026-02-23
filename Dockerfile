@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 # Build arguments
 ARG USERNAME=yolo
-ARG GITHUB_USERNAME=
+ARG GITHUB_USERNAME=""
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -84,6 +84,9 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.bashrc && 
 
 # Install Claude Code CLI as the user
 RUN su - ${USERNAME} -c "curl -fsSL https://claude.ai/install.sh | bash"
+
+# Set default working directory
+WORKDIR /workspace
 
 EXPOSE 22
 SHELL ["/bin/bash", "-c"]
