@@ -3,6 +3,7 @@ FROM ubuntu:24.04
 # Build arguments
 ARG USERNAME=yolo
 ARG GITHUB_USERNAME=""
+ARG INSTALL_PI=true
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -32,6 +33,7 @@ RUN apt-get update && apt-get install -y \
     git \
     libxml2-utils \
     jq \
+    gettext-base \
     && rm -rf /var/lib/apt/lists/*
 
 # Harden SSH configuration
@@ -49,6 +51,18 @@ RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/s
 # Install Node.js (latest stable LTS)
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y nodejs
+
+# Install pi-coding-agent globally and apply body-timeout patch (optional, controlled by INSTALL_PI)
+COPY patches/body-timeout-fix-dist.zip /tmp/body-timeout-fix-dist.zip
+RUN if [ "${INSTALL_PI}" = "true" ]; then \
+        npm install -g @mariozechner/pi-coding-agent && \
+        PKG_DIST="$(npm root -g)/@mariozechner/pi-coding-agent/dist" && \
+        test -d "$PKG_DIST" && \
+        unzip -o /tmp/body-timeout-fix-dist.zip -d "$PKG_DIST"; \
+    else \
+        echo "Skipping pi-coding-agent install (INSTALL_PI=${INSTALL_PI})"; \
+    fi && \
+    rm -f /tmp/body-timeout-fix-dist.zip
 
 # Install .NET 10 SDK
 RUN wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
@@ -88,6 +102,13 @@ RUN su - ${USERNAME} -c "curl -fsSL https://claude.ai/install.sh | bash"
 # Set default working directory
 WORKDIR /workspace
 
+# Entrypoint renders ~/.pi/agent/models.json from template using env vars
+ENV USERNAME=${USERNAME}
+ENV INSTALL_PI=${INSTALL_PI}
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 EXPOSE 22
 SHELL ["/bin/bash", "-c"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/sbin/sshd", "-D"]

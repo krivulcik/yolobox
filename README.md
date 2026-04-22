@@ -31,6 +31,7 @@ When using Claude Code's "yolo mode", the AI can execute arbitrary commands with
 - **Node.js**: Latest LTS version
 - **.NET**: SDK 10.0
 - **Claude Code CLI**: Pre-installed
+- **pi-coding-agent** (optional): `@mariozechner/pi-coding-agent` with a body-timeout patch for slow LLM backends — see [pi-coding-agent](#pi-coding-agent-optional)
 - **SSH Server**: Hardened configuration with key-based authentication only
 - **Development Tools**: vim, mc, git, tmux, screen, curl, wget, jq, and more
 
@@ -40,6 +41,7 @@ When using Claude Code's "yolo mode", the AI can execute arbitrary commands with
 |----------|---------|-------------|
 | `USERNAME` | `yolo` | The non-root user created in the container |
 | `GITHUB_USERNAME` | (empty) | If set, fetches SSH public keys from GitHub for authentication |
+| `INSTALL_PI` | `true` | Set to `false` to skip installing `pi-coding-agent` and its patch |
 
 ## Usage
 
@@ -165,6 +167,71 @@ claude --dangerously-skip-permissions
 ```
 
 This allows Claude to execute commands without confirmation prompts, safely contained within the sandbox.
+
+## pi-coding-agent (optional)
+
+[`@mariozechner/pi-coding-agent`](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) is installed globally by default and patched with `patches/body-timeout-fix-dist.zip` (overlayed onto the package's `dist/providers` and `dist/utils`) to keep long-running, slow-LLM responses from timing out.
+
+### Enabling / disabling
+
+Controlled by the `INSTALL_PI` build arg (default `true`). Set in `.env`:
+
+```bash
+INSTALL_PI=false    # skip npm install, skip patch, skip models.json rendering
+```
+
+Then rebuild: `docker compose up -d --build`.
+
+### Configuring the model (`~/.pi/agent/models.json`)
+
+At container start, `entrypoint.sh` renders `/home/$USERNAME/.pi/agent/models.json` from a template using environment variables. This avoids baking API keys or endpoint URLs into the image.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PI_PROVIDER` | `local` | Provider key in `models.json` |
+| `PI_BASE_URL` | `http://localhost:11434` | Endpoint URL |
+| `PI_API` | `anthropic-messages` | API flavor: `anthropic-messages`, `openai-completions`, `openai-responses`, `google-gemini-cli`, `openai-codex-responses` |
+| `PI_API_KEY` | `MY_API_KEY` | API key sent to the endpoint |
+| `PI_MODEL_ID` | `opus` | Model id |
+| `PI_MODEL_NAME` | `opus` | Display name |
+| `PI_MODEL_REASONING` | `false` | Whether the model supports reasoning |
+| `PI_CONTEXT_WINDOW` | `100000` | Context window size |
+
+Example `.env` for an OpenAI-compatible LM Studio / llama.cpp server:
+
+```bash
+PI_PROVIDER=lmstudio
+PI_BASE_URL=http://host.docker.internal:1234/v1
+PI_API=openai-completions
+PI_API_KEY=MY_API_KEY
+PI_MODEL_ID=google/gemma-3-27b-it
+PI_MODEL_NAME=google/gemma-3-27b-it
+PI_MODEL_REASONING=false
+PI_CONTEXT_WINDOW=100000
+```
+
+Changes to `PI_*` variables are picked up by a simple `docker compose up -d` (the entrypoint re-renders the file on start) — no rebuild needed.
+
+### Verifying the patch
+
+After the container is running:
+
+```bash
+docker exec yolo-claudecode md5sum \
+  /usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/providers/{anthropic,google-gemini-cli,openai-codex-responses,openai-completions,openai-responses}.js \
+  /usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/utils/fetch.js
+```
+
+Compare against `md5sum` of the files inside `patches/body-timeout-fix-dist.zip`.
+
+### Running inside the container
+
+```bash
+ssh -p 22222 yolo@localhost
+cat ~/.pi/agent/models.json    # confirm substitutions
+cd /workspace
+pi                              # launch pi-coding-agent
+```
 
 ## SSH Security Notes
 

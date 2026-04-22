@@ -8,9 +8,20 @@ services:
       args:
         USERNAME: ${YOLO_USERNAME:-yolo}
         GITHUB_USERNAME: ${GITHUB_USERNAME}
+        INSTALL_PI: ${INSTALL_PI:-true}
     image: ${DOCKER_IMAGE:-yoloimage}
     container_name: ${CONTAINER_NAME:-yolo-claudecode}
     hostname: ${CONTAINER_NAME:-yolo-claudecode}
+
+    environment:
+      PI_PROVIDER: ${PI_PROVIDER:-local}
+      PI_BASE_URL: ${PI_BASE_URL:-http://localhost:11434}
+      PI_API: ${PI_API:-anthropic-messages}
+      PI_API_KEY: ${PI_API_KEY:-MY_API_KEY}
+      PI_MODEL_ID: ${PI_MODEL_ID:-opus}
+      PI_MODEL_NAME: ${PI_MODEL_NAME:-opus}
+      PI_MODEL_REASONING: ${PI_MODEL_REASONING:-false}
+      PI_CONTEXT_WINDOW: ${PI_CONTEXT_WINDOW:-100000}
 
     ports:
       - "${HOST_PORT:-22222}:22"
