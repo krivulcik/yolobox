@@ -55,10 +55,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
 # Install pi-coding-agent globally and apply body-timeout patch (optional, controlled by INSTALL_PI)
 COPY patches/body-timeout-fix-dist.zip /tmp/body-timeout-fix-dist.zip
 RUN if [ "${INSTALL_PI}" = "true" ]; then \
-        npm install -g @mariozechner/pi-coding-agent && \
-        PKG_DIST="$(npm root -g)/@mariozechner/pi-coding-agent/dist" && \
-        test -d "$PKG_DIST" && \
-        unzip -o /tmp/body-timeout-fix-dist.zip -d "$PKG_DIST"; \
+        set -eux; \
+        npm install -g @mariozechner/pi-coding-agent; \
+        PI_AI_DIST="$(npm root -g)/@mariozechner/pi-coding-agent/node_modules/@mariozechner/pi-ai/dist"; \
+        test -d "$PI_AI_DIST/providers"; \
+        unzip -o /tmp/body-timeout-fix-dist.zip -d "$PI_AI_DIST"; \
+        grep -q fetchWithNoBodyTimeout "$PI_AI_DIST/providers/anthropic.js"; \
+        test -f "$PI_AI_DIST/utils/fetch.js"; \
     else \
         echo "Skipping pi-coding-agent install (INSTALL_PI=${INSTALL_PI})"; \
     fi && \
@@ -81,6 +84,12 @@ RUN useradd -m -s /bin/bash ${USERNAME} && \
     chown ${USERNAME}: /workspace
 
 COPY home/yolo/ /home/${USERNAME}/
+
+# When pi is installed, require the models.json template to exist in the image
+RUN if [ "${INSTALL_PI}" = "true" ]; then \
+        test -f /home/${USERNAME}/.pi/agent/models.json.template \
+          || (echo "Missing home/yolo/.pi/agent/models.json.template (required when INSTALL_PI=true)" >&2 && exit 1); \
+    fi
 
 # Fetch GitHub public keys (only if GITHUB_USERNAME is set)
 RUN mkdir -p /home/${USERNAME}/.ssh && \

@@ -1,0 +1,17 @@
+{
+  "providers": {
+    "${PI_PROVIDER}": {
+      "baseUrl": "${PI_BASE_URL}",
+      "api": "${PI_API}",
+      "apiKey": "${PI_API_KEY}",
+      "models": [
+        {
+          "id": "${PI_MODEL_ID}",
+          "name": "${PI_MODEL_NAME}",
+          "reasoning": ${PI_MODEL_REASONING},
+          "contextWindow": ${PI_CONTEXT_WINDOW}
+        }
+      ]
+    }
+  }
+}
