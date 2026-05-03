@@ -2,5 +2,6 @@ home/yolo/.gitconfig
 home/yolo/.config
 home/yolo/.claude/
 home/yolo/.claude.json
+home/yolo/.pi/agent/extensions/*/node_modules/
 .env
 .env.*
