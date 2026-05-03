@@ -19,6 +19,9 @@ import {
 	type SimpleStreamOptions,
 	type StopReason,
 	type Tool,
+	type ToolCall,
+	type TextContent,
+	type ThinkingContent,
 } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
@@ -119,9 +122,25 @@ function streamAnthropicNoTimeout(
 				(params as any).system = context.systemPrompt;
 			}
 
+			// Add tools if available
+			if (context.tools && context.tools.length > 0) {
+				params.tools = context.tools.map((tool) => ({
+					name: tool.name,
+					description: tool.description,
+					input_schema: {
+						type: "object",
+						properties: (tool.parameters as any).properties || {},
+						required: (tool.parameters as any).required || [],
+					},
+				}));
+			}
+
 			const anthropicStream = await client.messages.stream(params, { signal: options?.signal });
 
 			stream.push({ type: "start", partial: output });
+
+			type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson?: string })) & { index: number };
+			const blocks = output.content as Block[];
 
 			for await (const event of anthropicStream) {
 				if (event.type === "message_start") {
@@ -133,31 +152,48 @@ function streamAnthropicNoTimeout(
 					calculateCost(model, output.usage);
 				} else if (event.type === "content_block_start") {
 					if (event.content_block.type === "text") {
-						output.content.push({ type: "text", text: "" });
+						output.content.push({ type: "text", text: "", index: event.index } as any);
 						stream.push({ type: "text_start", contentIndex: output.content.length - 1, partial: output });
 					} else if (event.content_block.type === "tool_use") {
-						output.content.push({ type: "toolCall", id: event.content_block.id, name: event.content_block.name, arguments: {} });
+						output.content.push({
+							type: "toolCall",
+							id: event.content_block.id,
+							name: event.content_block.name,
+							arguments: {},
+							partialJson: "",
+							index: event.index,
+						} as any);
 						stream.push({ type: "toolcall_start", contentIndex: output.content.length - 1, partial: output });
 					}
 				} else if (event.type === "content_block_delta") {
-					const block = output.content[output.content.length - 1];
-					if (event.delta.type === "text_delta" && block?.type === "text") {
+					const index = blocks.findIndex((b) => b.index === event.index);
+					const block = blocks[index];
+					if (!block) continue;
+
+					if (event.delta.type === "text_delta" && block.type === "text") {
 						block.text += event.delta.text;
-						stream.push({ type: "text_delta", contentIndex: output.content.length - 1, delta: event.delta.text, partial: output });
-					} else if (event.delta.type === "input_json_delta" && block?.type === "toolCall") {
-						const toolBlock = block as any;
-						toolBlock.partialJson = (toolBlock.partialJson || "") + event.delta.partial_json;
+						stream.push({ type: "text_delta", contentIndex: index, delta: event.delta.text, partial: output });
+					} else if (event.delta.type === "input_json_delta" && block.type === "toolCall") {
+						(block as any).partialJson = ((block as any).partialJson || "") + event.delta.partial_json;
 						try {
-							block.arguments = JSON.parse(toolBlock.partialJson);
+							block.arguments = JSON.parse((block as any).partialJson);
 						} catch {}
-						stream.push({ type: "toolcall_delta", contentIndex: output.content.length - 1, delta: event.delta.partial_json, partial: output });
+						stream.push({ type: "toolcall_delta", contentIndex: index, delta: event.delta.partial_json, partial: output });
 					}
 				} else if (event.type === "content_block_stop") {
-					const block = output.content[output.content.length - 1];
-					if (block?.type === "text") {
-						stream.push({ type: "text_end", contentIndex: output.content.length - 1, content: block.text, partial: output });
-					} else if (block?.type === "toolCall") {
-						stream.push({ type: "toolcall_end", contentIndex: output.content.length - 1, toolCall: block, partial: output });
+					const index = blocks.findIndex((b) => b.index === event.index);
+					const block = blocks[index];
+					if (!block) continue;
+
+					delete (block as any).index;
+					if (block.type === "text") {
+						stream.push({ type: "text_end", contentIndex: index, content: block.text, partial: output });
+					} else if (block.type === "toolCall") {
+						try {
+							block.arguments = JSON.parse((block as any).partialJson || "{}");
+						} catch {}
+						delete (block as any).partialJson;
+						stream.push({ type: "toolcall_end", contentIndex: index, toolCall: block, partial: output });
 					}
 				} else if (event.type === "message_delta") {
 					if ((event.delta as any).stop_reason) {
