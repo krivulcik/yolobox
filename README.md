@@ -32,6 +32,7 @@ When using Claude Code's "yolo mode", the AI can execute arbitrary commands with
 - **.NET**: SDK 10.0
 - **Claude Code CLI**: Pre-installed
 - **pi-coding-agent** (optional): `@mariozechner/pi-coding-agent` with a body-timeout patch for slow LLM backends — see [pi-coding-agent](#pi-coding-agent-optional)
+- **anthropic-no-timeout extension** (optional): Custom Anthropic provider with disabled body timeout for long streaming responses — see [anthropic-no-timeout Extension](#anthropic-no-timeout-extension-optional)
 - **SSH Server**: Hardened configuration with key-based authentication only
 - **Development Tools**: vim, mc, git, tmux, screen, curl, wget, jq, and more
 
@@ -41,7 +42,7 @@ When using Claude Code's "yolo mode", the AI can execute arbitrary commands with
 |----------|---------|-------------|
 | `USERNAME` | `yolo` | The non-root user created in the container |
 | `GITHUB_USERNAME` | (empty) | If set, fetches SSH public keys from GitHub for authentication |
-| `INSTALL_PI` | `true` | Set to `false` to skip installing `pi-coding-agent` and its patch |
+| `INSTALL_PI` | `true` | Set to `false` to skip installing `pi-coding-agent`, its patch, and the `anthropic-no-timeout` extension |
 
 ## Usage
 
@@ -170,7 +171,7 @@ This allows Claude to execute commands without confirmation prompts, safely cont
 
 ## pi-coding-agent (optional)
 
-[`@mariozechner/pi-coding-agent`](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) is installed globally by default and patched with `patches/body-timeout-fix-dist.zip` (overlayed onto the package's `dist/providers` and `dist/utils`) to keep long-running, slow-LLM responses from timing out.
+[`@mariozechner/pi-coding-agent`](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) is installed globally by default
 
 ### Enabling / disabling
 
@@ -182,55 +183,58 @@ INSTALL_PI=false    # skip npm install, skip patch, skip models.json rendering
 
 Then rebuild: `docker compose up -d --build`.
 
-### Configuring the model (`~/.pi/agent/models.json`)
+### Configuring Models (Simplified)
 
-At container start, `entrypoint.sh` renders `/home/$USERNAME/.pi/agent/models.json` from a template using environment variables. This avoids baking API keys or endpoint URLs into the image.
+The container auto-discovers available models from your LLM server at startup.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PI_PROVIDER` | `local` | Provider key in `models.json` |
-| `PI_BASE_URL` | `http://localhost:11434` | Endpoint URL |
-| `PI_API` | `anthropic-messages` | API flavor: `anthropic-messages`, `openai-completions`, `openai-responses`, `google-gemini-cli`, `openai-codex-responses` |
-| `PI_API_KEY` | `MY_API_KEY` | API key sent to the endpoint |
-| `PI_MODEL_ID` | `opus` | Model id |
-| `PI_MODEL_NAME` | `opus` | Display name |
-| `PI_MODEL_REASONING` | `false` | Whether the model supports reasoning |
-| `PI_CONTEXT_WINDOW` | `100000` | Context window size |
-
-Example `.env` for an OpenAI-compatible LM Studio / llama.cpp server:
+**Just set one environment variable:**
 
 ```bash
-PI_PROVIDER=lmstudio
-PI_BASE_URL=http://host.docker.internal:1234/v1
-PI_API=openai-completions
-PI_API_KEY=MY_API_KEY
-PI_MODEL_ID=google/gemma-3-27b-it
-PI_MODEL_NAME=google/gemma-3-27b-it
-PI_MODEL_REASONING=false
-PI_CONTEXT_WINDOW=100000
+LLM_ENDPOINT=http://127.0.0.1:8001
+# or
+LLM_ENDPOINT=http://host.docker.internal:11434  # Ollama on host
 ```
 
-Changes to `PI_*` variables are picked up by a simple `docker compose up -d` (the entrypoint re-renders the file on start) — no rebuild needed.
+The entrypoint script will:
+1. Fetch available models from `{LLM_ENDPOINT}/v1/models`
+2. Generate `~/.pi/agent/models.json` with all discovered models
+3. Use the `anthropic-no-timeout` provider for compatibility
 
-### Verifying the patch
-
-After the container is running:
+**Example `.env`:**
 
 ```bash
-docker exec yolo-claudecode md5sum \
-  /usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/providers/{anthropic,google-gemini-cli,openai-codex-responses,openai-completions,openai-responses}.js \
-  /usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/utils/fetch.js
+LLM_ENDPOINT=http://127.0.0.1:8001
 ```
 
-Compare against `md5sum` of the files inside `patches/body-timeout-fix-dist.zip`.
+That's it! After `docker compose up -d`, connect and run:
+
+```bash
+ssh -p 22222 yolo@localhost
+pi
+/model  # Select from auto-discovered models
+```
+
+**No LLM_ENDPOINT?** A default placeholder config is created that you can edit manually inside the container.
+
+### Manual Configuration (Advanced)
+
+If you need manual control, leave `LLM_ENDPOINT` empty and edit `~/.pi/agent/models.json` inside the container:
+
+```bash
+ssh -p 22222 yolo@localhost
+vim ~/.pi/agent/models.json
+```
+
+See [models.json format](#modelsjson-format) below for the schema.
 
 ### Running inside the container
 
 ```bash
 ssh -p 22222 yolo@localhost
-cat ~/.pi/agent/models.json    # confirm substitutions
+cat ~/.pi/agent/models.json    # view auto-discovered models
 cd /workspace
 pi                              # launch pi-coding-agent
+/model                          # select a model
 ```
 
 ## SSH Security Notes

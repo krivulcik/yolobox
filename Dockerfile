@@ -52,20 +52,14 @@ RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/s
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y nodejs
 
-# Install pi-coding-agent globally and apply body-timeout patch (optional, controlled by INSTALL_PI)
-COPY patches/body-timeout-fix-dist.zip /tmp/body-timeout-fix-dist.zip
+# Install pi-coding-agent globally (optional, controlled by INSTALL_PI)
+# Note: body-timeout fix is now handled by the anthropic-no-timeout extension
 RUN if [ "${INSTALL_PI}" = "true" ]; then \
         set -eux; \
         npm install -g @mariozechner/pi-coding-agent; \
-        PI_AI_DIST="$(npm root -g)/@mariozechner/pi-coding-agent/node_modules/@mariozechner/pi-ai/dist"; \
-        test -d "$PI_AI_DIST/providers"; \
-        unzip -o /tmp/body-timeout-fix-dist.zip -d "$PI_AI_DIST"; \
-        grep -q fetchWithNoBodyTimeout "$PI_AI_DIST/providers/anthropic.js"; \
-        test -f "$PI_AI_DIST/utils/fetch.js"; \
     else \
         echo "Skipping pi-coding-agent install (INSTALL_PI=${INSTALL_PI})"; \
-    fi && \
-    rm -f /tmp/body-timeout-fix-dist.zip
+    fi
 
 # Install .NET 10 SDK
 RUN wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
@@ -85,10 +79,22 @@ RUN useradd -m -s /bin/bash ${USERNAME} && \
 
 COPY home/yolo/ /home/${USERNAME}/
 
-# When pi is installed, require the models.json template to exist in the image
+# Install anthropic-no-timeout extension dependencies (optional, controlled by INSTALL_PI)
+# Extension source is already in home/yolo/.pi/agent/extensions/anthropic-no-timeout/
 RUN if [ "${INSTALL_PI}" = "true" ]; then \
-        test -f /home/${USERNAME}/.pi/agent/models.json.template \
-          || (echo "Missing home/yolo/.pi/agent/models.json.template (required when INSTALL_PI=true)" >&2 && exit 1); \
+        set -eux; \
+        cd /home/${USERNAME}/.pi/agent/extensions/anthropic-no-timeout; \
+        npm install --omit=dev; \
+        chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.pi; \
+        echo "Installed anthropic-no-timeout extension dependencies"; \
+    else \
+        echo "Skipping anthropic-no-timeout extension (INSTALL_PI=${INSTALL_PI})"; \
+    fi
+
+# When pi is installed, require the extension to exist in the image
+RUN if [ "${INSTALL_PI}" = "true" ]; then \
+        test -f /home/${USERNAME}/.pi/agent/extensions/anthropic-no-timeout/index.ts \
+          || (echo "Missing home/yolo/.pi/agent/extensions/anthropic-no-timeout/index.ts (required when INSTALL_PI=true)" >&2 && exit 1); \
     fi
 
 # Fetch GitHub public keys (only if GITHUB_USERNAME is set)

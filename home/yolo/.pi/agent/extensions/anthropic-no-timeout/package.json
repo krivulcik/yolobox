@@ -1,0 +1,12 @@
+{
+  "name": "anthropic-no-timeout",
+  "version": "1.0.0",
+  "description": "Anthropic provider with disabled body timeout for long streaming responses",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "undici": "^7.0.0"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
