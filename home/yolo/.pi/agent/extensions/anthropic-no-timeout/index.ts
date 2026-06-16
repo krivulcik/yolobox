@@ -75,7 +75,7 @@ function streamAnthropicNoTimeout(
 		try {
 			const client = new Anthropic({
 				baseURL: model.baseUrl,
-				apiKey: options?.apiKey || "not-needed",
+				apiKey: options?.apiKey || (model as any).apiKey || "not-needed",
 				dangerouslyAllowBrowser: true,
 				fetch: fetchWithNoBodyTimeout,
 			});
@@ -225,7 +225,7 @@ export default function (pi: ExtensionAPI) {
 	// Register provider capability - models added via LLM_ENDPOINT or models.json
 	pi.registerProvider("anthropic-no-timeout", {
 		baseUrl: "",  // Set per-model via models.json
-		apiKey: "not-needed",
+		apiKey: process.env.LLM_API_KEY || "not-needed",
 		api: "anthropic",
 		models: [],  // Empty - models added via LLM_ENDPOINT or models.json
 		streamSimple: streamAnthropicNoTimeout,
