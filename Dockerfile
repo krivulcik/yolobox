@@ -69,12 +69,16 @@ RUN wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/package
     apt-get install -y dotnet-sdk-10.0 && \
     rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user, allow passwordless sudo
-RUN useradd -m -s /bin/bash ${USERNAME} && \
-    usermod -aG sudo ${USERNAME} && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-${USERNAME} && \
-    chmod 440 /etc/sudoers.d/90-${USERNAME} && \
-    mkdir /workspace && \
+# Create a non-root user with host-matching UID/GID, allow passwordless sudo
+RUN set -eux; \
+    # Remove default 'ubuntu' user if present (it occupies UID 1000)
+    if id ubuntu >/dev/null 2>&1; then userdel -r ubuntu; fi; \
+    groupadd -g 1000 ${USERNAME}; \
+    useradd -m -u 1000 -g 1000 -s /bin/bash ${USERNAME}; \
+    usermod -aG sudo ${USERNAME}; \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-${USERNAME}; \
+    chmod 440 /etc/sudoers.d/90-${USERNAME}; \
+    mkdir /workspace; \
     chown ${USERNAME}: /workspace
 
 COPY home/yolo/ /home/${USERNAME}/

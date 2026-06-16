@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Fix workspace ownership in case the volume was created with different UID/GID
+chown ${USERNAME}:${USERNAME} /workspace 2>/dev/null || true
+
 USER_HOME="/home/${USERNAME}"
 AGENT_DIR="$USER_HOME/.pi/agent"
 MODELS_JSON="$AGENT_DIR/models.json"
@@ -16,8 +19,12 @@ if [ "${INSTALL_PI}" = "true" ]; then
         
         echo "entrypoint: fetching models from ${LLM_ENDPOINT}/v1/models"
         
-        # Fetch models from OpenAI-compatible endpoint
-        MODELS_RESPONSE=$(curl -s --max-time 10 "${LLM_ENDPOINT}/v1/models" 2>/dev/null || echo "")
+        # Fetch models from OpenAI-compatible endpoint (include API key if provided)
+        CURL_ARGS=(--max-time 10 -s "${LLM_ENDPOINT}/v1/models")
+        if [ -n "${LLM_API_KEY:-}" ]; then
+            CURL_ARGS+=(-H "Authorization: Bearer ${LLM_API_KEY}")
+        fi
+        MODELS_RESPONSE=$(curl "${CURL_ARGS[@]}" 2>/dev/null || echo "")
         
         if [ -n "${MODELS_RESPONSE}" ] && echo "${MODELS_RESPONSE}" | jq -e '.data' >/dev/null 2>&1; then
             # Successfully fetched models - generate models.json with anthropic-no-timeout provider
@@ -29,10 +36,10 @@ if [ "${INSTALL_PI}" = "true" ]; then
             cat > "$MODELS_JSON" << EOF
 {
   "providers": {
-    "anthropic-no-timeout": {
+    "work": {
       "baseUrl": "${LLM_ENDPOINT}",
-      "api": "anthropic",
-      "apiKey": "not-needed-for-local",
+      "api": "openai-completions",
+      "apiKey": "${LLM_API_KEY:-not-needed-for-local}",
       "models": $(echo "${MODELS_RESPONSE}" | jq '[.data[] | {
         id: .id,
         name: (.id | split("/") | .[-1]),
@@ -48,20 +55,20 @@ EOF
             echo "entrypoint: generated $MODELS_JSON with discovered models"
         else
             echo "entrypoint: warning - failed to fetch models from ${LLM_ENDPOINT}/v1/models" >&2
-            echo "entrypoint: check LLM_ENDPOINT is correct and server is running" >&2
+            echo "entrypoint: check LLM_ENDPOINT is correct, server is running, and API key is valid" >&2
             # Fall through to default config
         fi
     fi
     
     # If models.json doesn't exist yet, create a default config
     if [ ! -f "$MODELS_JSON" ]; then
-        echo "entrypoint: no LLM_ENDPOINT set, creating default config"
+        echo "entrypoint: could not auto-discover models, creating default config"
         cat > "$MODELS_JSON" << 'EOF'
 {
   "providers": {
-    "llm-endpoint": {
+    "work": {
       "baseUrl": "http://localhost:11434",
-      "api": "anthropic",
+      "api": "openai-completions",
       "apiKey": "not-needed",
       "models": [
         {
