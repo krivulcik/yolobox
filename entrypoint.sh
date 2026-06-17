@@ -8,6 +8,46 @@ USER_HOME="/home/${USERNAME}"
 AGENT_DIR="$USER_HOME/.pi/agent"
 MODELS_JSON="$AGENT_DIR/models.json"
 
+# Persist selected home files/dirs on the /workspace volume by symlinking them
+# from $USER_HOME into /workspace/.home. /workspace is a host-mounted volume, so
+# this can only happen at container start (not during image build).
+#
+# On first run we seed the persistent copy from whatever was baked into the image
+# (e.g. .tmux.conf, .bash_history, .pi, .tmux/tpm), then replace the home path with
+# a symlink. On later runs the persistent copy already exists and is reused as-is.
+WORKSPACE_HOME="/workspace/.home"
+# Files that may not exist until a tool creates them (dangling symlink is fine).
+LINK_FILES=(.tmux.conf .claude.json .bash_history)
+# Directories: ensure the symlink target exists so tools can write into it.
+LINK_DIRS=(.tmux .pi .claude)
+
+link_persisted_item() {
+    local item="$1" kind="$2"
+    local src="$USER_HOME/$item"
+    local dst="$WORKSPACE_HOME/$item"
+
+    if [ ! -e "$dst" ]; then
+        if [ -e "$src" ] && [ ! -L "$src" ]; then
+            # Seed persistent copy from the image-baked content.
+            mv "$src" "$dst"
+        elif [ "$kind" = "dir" ]; then
+            mkdir -p "$dst"
+        fi
+    fi
+
+    # Replace any real file/dir/stale symlink in the home dir with the symlink.
+    [ ! -L "$src" ] && rm -rf "$src"
+    ln -sfn "$dst" "$src"
+}
+
+mkdir -p "$WORKSPACE_HOME"
+for item in "${LINK_FILES[@]}"; do link_persisted_item "$item" file; done
+for item in "${LINK_DIRS[@]}";  do link_persisted_item "$item" dir;  done
+chown -R "${USERNAME}:${USERNAME}" "$WORKSPACE_HOME"
+for item in "${LINK_FILES[@]}" "${LINK_DIRS[@]}"; do
+    chown -h "${USERNAME}:${USERNAME}" "$USER_HOME/$item" 2>/dev/null || true
+done
+
 if [ "${INSTALL_PI}" = "true" ]; then
     mkdir -p "$AGENT_DIR"
     

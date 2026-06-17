@@ -111,8 +111,9 @@ RUN mkdir -p /home/${USERNAME}/.ssh && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
     mkdir /var/run/sshd
 
-# Add .local/bin to PATH in bashrc
+# Add .local/bin to PATH and a 'claude' alias (always skip permission prompts) in bashrc
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.bashrc && \
+    echo "alias claude='claude --dangerously-skip-permissions'" >> /home/${USERNAME}/.bashrc && \
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
 
 # Install Claude Code CLI as the user
