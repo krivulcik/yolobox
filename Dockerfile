@@ -118,6 +118,9 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.bashrc && 
 # Install Claude Code CLI as the user
 RUN su - ${USERNAME} -c "curl -fsSL https://claude.ai/install.sh | bash"
 
+# Install TPM (Tmux Plugin Manager)
+RUN su - ${USERNAME} -c "git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm"
+
 # Set default working directory
 WORKDIR /workspace
 
