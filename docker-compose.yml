@@ -12,6 +12,12 @@ services:
     hostname: ${CONTAINER_NAME:-yolo-claudecode}
 
     environment:
+      # Host user UID/GID to align the in-container user with, so files written to
+      # the mounted /workspace stay accessible on the host. If unset, the entrypoint
+      # auto-detects from the /workspace mount owner. Set in .env or export before
+      # `docker compose up`, e.g. HOST_UID=$(id -u) HOST_GID=$(id -g).
+      HOST_UID: ${HOST_UID:-}
+      HOST_GID: ${HOST_GID:-}
       # Simplified LLM configuration - auto-discovers models from endpoint
       LLM_ENDPOINT: ${LLM_ENDPOINT:-}
       LLM_API_KEY: ${LLM_API_KEY:-}

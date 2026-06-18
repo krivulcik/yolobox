@@ -54,10 +54,14 @@ sudo docker stop "$DOCKERHOSTNAME" 2>/dev/null || true
 sudo docker rm "$DOCKERHOSTNAME" 2>/dev/null || true
 
 # Run new container
+# Pass the invoking user's UID/GID so the container user is remapped to match,
+# keeping files written to $WORKSPACE_PATH accessible on the host.
 echo "Starting new container..."
 sudo docker run -d \
     -p "$PORT:22" \
     -v "$WORKSPACE_PATH:/workspace" \
+    -e HOST_UID="$(id -u)" \
+    -e HOST_GID="$(id -g)" \
     --hostname "$DOCKERHOSTNAME" \
     --name "$DOCKERHOSTNAME" \
     "$IMAGE"

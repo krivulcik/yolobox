@@ -81,6 +81,31 @@ docker compose up -d
 | `DOCKER_IMAGE` | yoloimage | Docker image to use |
 | `HOST_PORT` | 22222 | Host port for SSH access |
 | `WORKSPACE_PATH` | `$HOME/workspace/$CONTAINER_NAME` | Workspace mount path |
+| `HOST_UID` | auto-detect from mount | Host UID the container user is remapped to (see below) |
+| `HOST_GID` | auto-detect from mount | Host GID the container user is remapped to (see below) |
+
+## Host user / volume permissions
+
+The container user (`yolo`) is created with UID/GID 1000 in the image. If your host
+user has a different UID/GID, files the agent writes to the mounted `/workspace`
+would be inaccessible to you on the host. To consolidate, the entrypoint remaps the
+container user at startup, in this order of precedence:
+
+1. `HOST_UID` / `HOST_GID` if set,
+2. otherwise the current owner of the `/workspace` mount (auto-detect),
+3. otherwise the image default (1000).
+
+In most cases auto-detect is enough. To be explicit (recommended for a fresh,
+empty workspace dir), set them to your host user before starting:
+
+```bash
+echo "HOST_UID=$(id -u)" >> .env
+echo "HOST_GID=$(id -g)" >> .env
+docker compose up -d
+```
+
+The remap also re-owns any existing `/workspace` files still held by the old UID/GID,
+so switching an existing box over is safe.
 
 ## Running Multiple Boxes Simultaneously
 

@@ -1,12 +1,59 @@
 #!/bin/bash
 set -e
 
-# Fix workspace ownership in case the volume was created with different UID/GID
-chown ${USERNAME}:${USERNAME} /workspace 2>/dev/null || true
-
 USER_HOME="/home/${USERNAME}"
 AGENT_DIR="$USER_HOME/.pi/agent"
 MODELS_JSON="$AGENT_DIR/models.json"
+
+# --- Align the in-container user with the host user (volume UID/GID consolidation) ---
+# Files in the bind-mounted /workspace are owned by whatever UID/GID the container
+# user has. If that doesn't match the host user, the host can't read/write the files
+# the agent creates (and vice versa). Resolve the target IDs and remap the user
+# before anything else touches the volume. Precedence:
+#   1. HOST_UID / HOST_GID env (set by docker-compose / yolobox-redeploy.sh), else
+#   2. the current owner of the /workspace mount (skipped when root-owned), else
+#   3. keep the image default (1000).
+CURRENT_UID="$(id -u "${USERNAME}")"
+CURRENT_GID="$(id -g "${USERNAME}")"
+
+TARGET_UID="${HOST_UID:-}"
+TARGET_GID="${HOST_GID:-}"
+
+if [ -d /workspace ]; then
+    WS_UID="$(stat -c '%u' /workspace 2>/dev/null || echo "")"
+    WS_GID="$(stat -c '%g' /workspace 2>/dev/null || echo "")"
+    [ -z "$TARGET_UID" ] && [ -n "$WS_UID" ] && [ "$WS_UID" != "0" ] && TARGET_UID="$WS_UID"
+    [ -z "$TARGET_GID" ] && [ -n "$WS_GID" ] && [ "$WS_GID" != "0" ] && TARGET_GID="$WS_GID"
+fi
+
+TARGET_UID="${TARGET_UID:-$CURRENT_UID}"
+TARGET_GID="${TARGET_GID:-$CURRENT_GID}"
+
+if [ "$TARGET_GID" != "$CURRENT_GID" ]; then
+    echo "entrypoint: remapping ${USERNAME} GID ${CURRENT_GID} -> ${TARGET_GID}"
+    groupmod -g "$TARGET_GID" "${USERNAME}" 2>/dev/null \
+        || echo "entrypoint: warning - could not set GID ${TARGET_GID} (already in use?)" >&2
+fi
+if [ "$TARGET_UID" != "$CURRENT_UID" ]; then
+    echo "entrypoint: remapping ${USERNAME} UID ${CURRENT_UID} -> ${TARGET_UID}"
+    usermod -u "$TARGET_UID" "${USERNAME}" 2>/dev/null \
+        || echo "entrypoint: warning - could not set UID ${TARGET_UID} (already in use?)" >&2
+fi
+
+# Re-own anything still held by the old IDs: the user's home plus any /workspace
+# files written under the previous UID/GID. usermod only rehomes home-dir files by
+# UID, so fix the GID and the volume explicitly. Runs only when an actual remap
+# happened, to avoid a needless recursive chown on every start.
+EFFECTIVE_UID="$(id -u "${USERNAME}")"
+EFFECTIVE_GID="$(id -g "${USERNAME}")"
+if [ "$EFFECTIVE_UID" != "$CURRENT_UID" ] || [ "$EFFECTIVE_GID" != "$CURRENT_GID" ]; then
+    chown -R "${EFFECTIVE_UID}:${EFFECTIVE_GID}" "$USER_HOME" 2>/dev/null || true
+    find /workspace -xdev \( -uid "$CURRENT_UID" -o -gid "$CURRENT_GID" \) \
+        -exec chown -h "${EFFECTIVE_UID}:${EFFECTIVE_GID}" {} + 2>/dev/null || true
+fi
+
+# Ensure the workspace root itself is owned by the (possibly remapped) user.
+chown "${USERNAME}:${USERNAME}" /workspace 2>/dev/null || true
 
 # Persist selected home files/dirs on the /workspace volume by symlinking them
 # from $USER_HOME into /workspace/.home. /workspace is a host-mounted volume, so
