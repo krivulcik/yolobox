@@ -66,12 +66,15 @@ WORKSPACE_HOME="/workspace/.home"
 # Files that may not exist until a tool creates them (dangling symlink is fine).
 LINK_FILES=(.tmux.conf .claude.json .bash_history)
 # Directories: ensure the symlink target exists so tools can write into it.
-LINK_DIRS=(.tmux .pi .claude)
+LINK_DIRS=(.tmux .pi .claude .local/share/tmux/resurrect)
 
 link_persisted_item() {
     local item="$1" kind="$2"
     local src="$USER_HOME/$item"
     local dst="$WORKSPACE_HOME/$item"
+
+    # Ensure parent dirs exist for nested items (e.g. .local/share/tmux/resurrect).
+    mkdir -p "$(dirname "$dst")" "$(dirname "$src")"
 
     if [ ! -e "$dst" ]; then
         if [ -e "$src" ] && [ ! -L "$src" ]; then
@@ -85,6 +88,12 @@ link_persisted_item() {
     # Replace any real file/dir/stale symlink in the home dir with the symlink.
     [ ! -L "$src" ] && rm -rf "$src"
     ln -sfn "$dst" "$src"
+
+    # For nested items, ensure the home-side parent chain we created is owned by
+    # the user (mkdir as root would otherwise leave root-owned dirs).
+    case "$item" in
+        */*) chown -R "${USERNAME}:${USERNAME}" "$USER_HOME/${item%%/*}" 2>/dev/null || true ;;
+    esac
 }
 
 mkdir -p "$WORKSPACE_HOME"
