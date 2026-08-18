@@ -182,6 +182,14 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.bashrc && 
     echo "alias claude='claude --dangerously-skip-permissions'" >> /home/${USERNAME}/.bashrc && \
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
 
+# deepseek_override: system script that sets a model to a DeepSeek reasoning profile in
+# pi's models.json (post-deploy, no entrypoint change). Installed to /usr/local/bin so it
+# is on PATH for all shells (SSH, agent bash tool, root). home/yolo/.local/bin copy is for
+# interactive login shells.
+COPY home/yolo/.local/bin/deepseek_override /usr/local/bin/deepseek_override
+RUN chmod 755 /usr/local/bin/deepseek_override /home/${USERNAME}/.local/bin/deepseek_override && \
+    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.local/bin/deepseek_override
+
 # Install Claude Code CLI as the user
 RUN su - ${USERNAME} -c "curl -fsSL https://claude.ai/install.sh | bash"
 

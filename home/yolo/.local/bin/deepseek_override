@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""deepseek_override — set a model to a proper DeepSeek reasoning profile in pi's models.json.
+
+Usage:
+    deepseek_override <model_id> [provider]
+
+Operates on the pipeline user's pi models.json (~/.pi/agent/models.json, which is
+symlinked into the persisted /workspace/.home). For the named model it sets:
+  - the deepseek reasoning profile (reasoning, compat, thinkingLevelMap, input,
+    maxTokens, contextWindow)
+  - cost: keeps the model's EXISTING cost if any rate is already non-zero,
+    otherwise applies the DEFAULT_DEEPSEEK_COST below.
+
+Idempotent and non-destructive. Run as the container user or root.
+"""
+import json
+import os
+import sys
+
+# Default pricing for a DeepSeek reasoning model (USD per 1M tokens).
+# Only applied when the model doesn't already carry a non-zero cost.
+DEFAULT_DEEPSEEK_COST = {
+    "input": 0.14,
+    "output": 0.28,
+    "cacheRead": 0.028,
+    "cacheWrite": 0,
+}
+
+
+def deepseek_profile() -> dict:
+    return {
+        "reasoning": True,
+        "input": ["text"],
+        "maxTokens": 144072,
+        "contextWindow": 1000000,
+        "compat": {
+            "requiresReasoningContentOnAssistantMessages": True,
+            "thinkingFormat": "deepseek",
+            "supportsReasoningEffort": True,
+        },
+        "thinkingLevelMap": {
+            "minimal": "high",
+            "low": "high",
+            "medium": "high",
+            "high": "high",
+            "xhigh": "max",
+        },
+    }
+
+
+_COST_KEYS = ("input", "output", "cacheRead", "cacheWrite")
+
+
+def _find_models_json() -> str:
+    candidate = os.environ.get("PI_MODELS", "")
+    if candidate and os.path.exists(candidate):
+        return candidate
+    home = os.path.expanduser("~/.pi/agent/models.json")
+    if os.path.exists(home):
+        return home
+    # When run as root inside the box, the pipeline user's home may differ.
+    for alt in ("/home/yolo/.pi/agent/models.json", "/workspace/.home/.pi/agent/models.json"):
+        if os.path.exists(alt):
+            return alt
+    raise FileNotFoundError("pi models.json not found")
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("usage: deepseek_override <model_id> [provider=work]", file=sys.stderr)
+        return 2
+    model_id = sys.argv[1]
+    provider = sys.argv[2] if len(sys.argv) > 2 else "work"
+
+    try:
+        path = _find_models_json()
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    with open(path, "r", encoding="utf-8") as fh:
+        cfg = json.load(fh)
+
+    prov = cfg.get("providers", {}).get(provider)
+    if prov is None:
+        print(f"error: provider {provider!r} not found in models.json", file=sys.stderr)
+        return 1
+
+    models = prov.get("models", [])
+    model = next((m for m in models if m.get("id") == model_id), None)
+    if model is None:
+        print(f"error: model {model_id!r} not found in provider {provider!r}", file=sys.stderr)
+        return 1
+
+    # Apply the deepseek reasoning profile.
+    for key, value in deepseek_profile().items():
+        model[key] = value
+
+    # Cost rule: keep existing cost if any rate is non-zero, else use the default.
+    existing = model.get("cost") or {}
+    has_cost = any((existing.get(k) or 0) != 0 for k in _COST_KEYS)
+    model["cost"] = dict(existing) if has_cost else dict(DEFAULT_DEEPSEEK_COST)
+    cost_mode = "keep existing" if has_cost else "default"
+
+    # Write back atomically, matching pi's expectations (600/44, owned by the user).
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, indent=2)
+        fh.write("\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+    print(f"deepseek_override: {provider}/{model_id} -> reasoning profile applied (cost: {cost_mode})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
