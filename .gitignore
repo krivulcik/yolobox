@@ -9,4 +9,3 @@ home/yolo/.pi/agent/extensions/*/node_modules/
 # Local clones of the extension forks (pi-searxng, pi-subagents, candidates, etc.).
 # They are separate repos, installed at image build via git clone — never vendor them here.
 helperrepos/
-.env.wsl
