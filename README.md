@@ -35,6 +35,7 @@ When using Claude Code's "yolo mode", the AI can execute arbitrary commands with
 - **anthropic-no-timeout extension** (optional): Custom Anthropic provider with disabled body timeout for long streaming responses — see [anthropic-no-timeout Extension](#anthropic-no-timeout-extension-optional)
 - **SSH Server**: Hardened configuration with key-based authentication only
 - **Development Tools**: vim, mc, git, tmux, screen, curl, wget, jq, and more
+- **Runs on Docker or WSL containers**: Docker / Docker Compose everywhere, or Windows' built-in `wslc` runtime without Docker Desktop — see [Using WSL Containers on Windows](#using-wsl-containers-on-windows-wslc)
 
 ## Build Arguments
 
@@ -152,11 +153,82 @@ Configure the container by creating a `.env` file or exporting environment varia
 
 See [DOCKER_COMPOSE_USAGE.md](DOCKER_COMPOSE_USAGE.md) for more detailed documentation.
 
+### Using WSL Containers on Windows (wslc)
+
+On Windows, `yolobox-wslc.ps1` runs YoloBox with the built-in WSL container runtime
+(`wslc`) instead of Docker Desktop. It builds from the same `Dockerfile` and passes the
+same build arguments and environment variables as Docker Compose. Configuration lives in
+`.env.wsl`.
+
+#### Requirements
+
+- WSL 2.9.3+ with WSL containers (`wsl --update`; check with `wslc --help`)
+- Windows PowerShell 5.1 or PowerShell 7
+
+#### Quick Start
+
+```powershell
+# 1. Create your environment file
+Copy-Item .env.wsl.example .env.wsl
+
+# 2. Edit .env.wsl (GITHUB_USERNAME, WORKSPACE_PATH, LLM_ENDPOINT, ...)
+
+# 3. Build (if needed), start and connect
+.\yolobox-wslc.ps1 -Connect
+```
+
+#### Available Commands
+
+| Action | Command |
+|--------|---------|
+| Build image if missing, (re)create container | `.\yolobox-wslc.ps1` |
+| Force image rebuild | `.\yolobox-wslc.ps1 -Build` |
+| Deploy and SSH in | `.\yolobox-wslc.ps1 -Connect` |
+| Stop and remove container (workspace kept) | `.\yolobox-wslc.ps1 -Down` |
+| Use a different env file | `.\yolobox-wslc.ps1 -EnvFile .env.other` |
+| Don't create or check `%USERPROFILE%\.wslconfig` | `.\yolobox-wslc.ps1 -SkipWslConfig` |
+| View logs | `wslc container logs wsl-yolo-claudecode` |
+| Shell without SSH | `wslc exec -it wsl-yolo-claudecode su - yolo` |
+
+#### Environment Variables
+
+Same as Docker Compose (including `LLM_*`, `SEARXNG_URL`, `CLAUDE_*` and the `PI_*` build
+args), with these WSL-specific defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONTAINER_NAME` | `wsl-yolo-claudecode` | Container name and hostname |
+| `DOCKER_IMAGE` | `wsl-yoloimage` | Image name (wslc has its own image store, separate from Docker) |
+| `HOST_PORT` | `33333` | Host port for SSH access |
+| `APP_PORT` | `4444` | Host port mapped to container port 3000 |
+| `WORKSPACE_PATH` | `%USERPROFILE%\workspace\<CONTAINER_NAME>` | Windows path mounted at `/workspace` |
+
+The ports differ from the Docker defaults, so a Docker box and a WSL box can run at the same
+time. `host.docker.internal` in any value is rewritten to `host.wslc.internal`. If both boxes
+use the same `WORKSPACE_PATH`, they share `/workspace/.home`, which holds the agent logins and
+sessions.
+
+#### Connecting from a WSL Distro
+
+wslc publishes ports on Windows' `127.0.0.1`. With default NAT networking, `localhost` inside
+a WSL distro (e.g. Ubuntu) is not Windows. On first run, the script creates
+`%USERPROFILE%\.wslconfig` with `networkingMode=mirrored`, only if the file doesn't exist, and
+offers to run `wsl --shutdown`. After that, `ssh -p 33333 yolo@localhost` works from the distro
+too. Without mirrored mode, connect from PowerShell: `ssh -p 33333 yolo@127.0.0.1`.
+
+#### Differences from Docker Compose
+
+- No restart policy: run the script again after a reboot or `wsl --shutdown`
+- The first build downloads everything again (images are not shared with Docker)
+- Windows only
+
 ### Connect via SSH
 
 ```bash
 ssh -p 22222 yolo@localhost
 ```
+
+With WSL containers, use port `33333` (or your `HOST_PORT` from `.env.wsl`).
 
 ### Run Claude in Yolo Mode
 
@@ -181,7 +253,7 @@ Controlled by the `INSTALL_PI` build arg (default `true`). Set in `.env`:
 INSTALL_PI=false    # skip npm install, skip patch, skip models.json rendering
 ```
 
-Then rebuild: `docker compose up -d --build`.
+Then rebuild: `docker compose up -d --build` (with WSL containers: `.\yolobox-wslc.ps1 -Build`).
 
 ### Configuring Models (Simplified)
 
@@ -355,9 +427,14 @@ token). Leave `CLAUDE_LOCAL_LLM` unset/`false` to keep Claude Code on the hosted
 
 ## Exposed Ports
 
-- **22**: SSH server
+- **22**: SSH server (host `22222` with Docker Compose, `33333` with WSL containers)
+- **3000**: Application port (host `4300` with Docker Compose, `4444` with WSL containers)
 
 ## Changelog
+
+### 2026-10-29
+
+- **Added WSL containers support for Windows (`yolobox-wslc.ps1`).** Runs YoloBox on the built-in `wslc` runtime without Docker Desktop, using the same `Dockerfile`, build args and env vars, configured via `.env.wsl` (template: `.env.wsl.example`). Defaults to SSH `33333` and app port `4444` so it can run alongside a Docker box, rewrites `host.docker.internal` to `host.wslc.internal`, and on first run creates `.wslconfig` with mirrored networking so SSH works from WSL distros. See [Using WSL Containers on Windows](#using-wsl-containers-on-windows-wslc).
 
 ### 2026-07-02
 
